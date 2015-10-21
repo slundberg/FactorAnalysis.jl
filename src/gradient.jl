@@ -132,17 +132,6 @@ function gradient_slow(S::AbstractMatrix, Sigma_X::SparseMatrixCSC, A::SparseMat
     dSigma_X, dA, dSigma_L
 end
 
-function gradient(S::AbstractMatrix, Sigma_X::DenseMatrix, A::DenseMatrix, Sigma_L::AbstractMatrix)
-    Sigma = Sigma_X + A*Sigma_L*A'
-    Theta = inv(Sigma)
-
-    tmp = Theta*(S - Sigma)*Theta
-    dA = 2*tmp*A*Sigma_L
-    dSigma_L = A'*tmp*A
-    dSigma_X = diagm(diag(tmp))
-
-    dSigma_X, dA, dSigma_L
-end
 
 function gradient_optimize(S, Ain; iterations=1000, rho=0.0, show_trace=true)
     P,K = size(Ain)
@@ -156,12 +145,12 @@ function gradient_optimize(S, Ain; iterations=1000, rho=0.0, show_trace=true)
 
     function f(x)
         vec2state!(Sigma_X, A, Sigma_L, x)
-        -loglikelihood_slow(S, Sigma_X, A, Sigma_L)
+        -loglikelihood_slow(S, Sigma_X, A, Sigma_L, rho)
     end
 
     function df!(x, g)
         vec2state!(Sigma_X, A, Sigma_L, x)
-        dSigma_X, dA, dSigma_L = gradient_slow(S, Sigma_X, A, Sigma_L)
+        dSigma_X, dA, dSigma_L = gradient_slow(S, Sigma_X, A, Sigma_L, rho)
         state2vec!(g, dSigma_X, dA, dSigma_L)
         g[:] = -g
     end
