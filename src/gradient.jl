@@ -49,7 +49,7 @@ Evaluates the loglikelihood of the confirmatory model.
 S - The sample covariance matrix.
 
 """
-function loglikelihood(S::AbstractMatrix, Sigma_X::SparseMatrixCSC, A::SparseMatrixCSC, Sigma_L::AbstractMatrix)
+function loglikelihood(S::AbstractMatrix, Sigma_X::SparseMatrixCSC, A::SparseMatrixCSC, Sigma_L::AbstractMatrix, rho=0.0)
 
     # invert Sigma_X efficiently
     #if minimum(Sigma_X.nzval) <= 0.0 return -1e16 end
@@ -62,7 +62,7 @@ function loglikelihood(S::AbstractMatrix, Sigma_X::SparseMatrixCSC, A::SparseMat
     #if eigmin(tmp) <= 0.0 return -1e16 end
     logdetSigma = nothing
     try
-        logdetSigma = sum(log(Sigma_X.nzval)) + logdet(tmp)
+        logdetSigma = sum(log(Sigma_X.nzval)) + logdet(tmp) #+ #rho*sum(abs(Sigma_L))
     catch
         return -1e16
     end
@@ -156,12 +156,12 @@ function gradient_optimize(S, Ain; iterations=1000, rho=0.0, show_trace=true)
 
     function f(x)
         vec2state!(Sigma_X, A, Sigma_L, x)
-        -loglikelihood(S, Sigma_X, A, Sigma_L)
+        -loglikelihood_slow(S, Sigma_X, A, Sigma_L)
     end
 
     function df!(x, g)
         vec2state!(Sigma_X, A, Sigma_L, x)
-        dSigma_X, dA, dSigma_L = gradient(S, Sigma_X, A, Sigma_L)
+        dSigma_X, dA, dSigma_L = gradient_slow(S, Sigma_X, A, Sigma_L)
         state2vec!(g, dSigma_X, dA, dSigma_L)
         g[:] = -g
     end
