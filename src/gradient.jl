@@ -52,21 +52,20 @@ S - The sample covariance matrix.
 function loglikelihood(S::AbstractMatrix, Sigma_X::SparseMatrixCSC, A::SparseMatrixCSC, Sigma_L::AbstractMatrix)
     Sigma = Sigma_X + A*Sigma_L*A'
     Theta = inv(Sigma)
-
-    # rather than throwing exceptions we treat invalid parameters as very unlikely
-    try
-        logdet(Theta) - trace(S*Theta)
-    catch e
+    if eigmin(Theta) < 0.0
         return -1e16
     end
+    logdet(Theta) - trace(S*Theta)
 end
 function loglikelihood(S::AbstractMatrix, Sigma_X::DenseMatrix, A::DenseMatrix, Sigma_L::AbstractMatrix)
     Sigma = Sigma_X + A*Sigma_L*A'
     Theta = inv(Sigma)
-
+    if minimum(eigvals(Theta)) < 0.0
+        return -1e16
+    end
     # rather than throwing exceptions we treat invalid parameters as very unlikely
     try
-        logdet(Theta) - trace(S*Theta)
+        return logdet(Theta) - trace(S*Theta)
     catch e
         return -1e16
     end
@@ -78,13 +77,13 @@ function gradient(S::AbstractMatrix, Sigma_X::SparseMatrixCSC, A::SparseMatrixCS
 
     tmp = Theta*(S - Sigma)*Theta
     dA_dense = 2*tmp*A*Sigma_L
-    dSigma_L = A'*tmp*A
+    dSigma_L = 2*A'*tmp*A
     dSigma_X = spdiagm(diag(tmp))
 
     dA = deepcopy(A)
     rows = rowvals(dA)
     vals = nonzeros(dA)
-    K = size(A)[2]
+    K = size(dA)[2]
     for col = 1:K
         for j in nzrange(dA, col)
             vals[j] = dA_dense[rows[j],col]
@@ -108,7 +107,7 @@ end
 
 function gradient_optimize(S, Ain; iterations=1000, rho=0.0, show_trace=true)
     P,K = size(Ain)
-    
+
     # init our parameters
     Sigma_X = speye(P)
     A = deepcopy(Ain)

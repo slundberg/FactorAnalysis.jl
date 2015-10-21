@@ -1,8 +1,8 @@
 
 # vec2state! and state2vec!
 srand(1)
-P = 10
-K = 5
+P = 14
+K = 7
 Sigma_X = spdiagm(rand(P) .+ 0.2)
 A = sparse(1:P, Int64[ceil(i/2) for i in 1:P], ones(P))
 Sigma_L = FactorAnalysis.randcor(K, 0.2)
@@ -15,7 +15,7 @@ state2vec!(x, Sigma_X, A, Sigma_L)
 
 
 # likelihood
-N = 1000
+N = 10000
 X = FactorAnalysis.samples(Sigma_X, A, Sigma_L, N)
 S = X*X' / N
 Base.cov2cor!(S, sqrt(diag(S)))
@@ -35,8 +35,41 @@ for i in 1:P
     Sigma_X[i,i] = tmp
     @test abs(dSigma_X[i,i] - (l1-l2)/(2*eps)) < 1e-6
 end
+for i in 1:K, j in i+1:K,
+    tmp = Sigma_L[i,j]
+    Sigma_L[i,j] = Sigma_L[j,i] = tmp + eps
+    l1 = loglikelihood(S, Sigma_X, A, Sigma_L)
+    Sigma_L[i,j] = Sigma_L[j,i] = tmp - eps
+    l2 = loglikelihood(S, Sigma_X, A, Sigma_L)
+    Sigma_L[i,j] = Sigma_L[j,i] = tmp
+    @test abs(dSigma_L[i,j] - (l1-l2)/(2*eps)) < 1e-6
+end
+rows = rowvals(A)
+vals = nonzeros(A)
+for col = 1:K
+    for j in nzrange(A, col)
+        tmp = vals[j]
+        vals[j] = tmp + eps
+        l1 = loglikelihood(S, Sigma_X, A, Sigma_L)
+        vals[j] = tmp - eps
+        l2 = loglikelihood(S, Sigma_X, A, Sigma_L)
+        vals[j] = tmp
+        @test abs(dA[rows[j],col] - (l1-l2)/(2*eps)) < 1e-6
+    end
+end
+
+for i in 1:P, j in i+1:K,
+    tmp = Sigma_L[i,j]
+    Sigma_L[i,j] = Sigma_L[j,i] = tmp + eps
+    l1 = loglikelihood(S, Sigma_X, A, Sigma_L)
+    Sigma_L[i,j] = Sigma_L[j,i] = tmp - eps
+    l2 = loglikelihood(S, Sigma_X, A, Sigma_L)
+    Sigma_L[i,j] = Sigma_L[j,i] = tmp
+    @test abs(dSigma_L[i,j] - (l1-l2)/(2*eps)) < 1e-6
+end
+
 
 # gradient_optimize
 truthLL = loglikelihood(S, Sigma_X, A, Sigma_L)
-Sigma_Xopt, Aopt, Sigma_Lopt = gradient_optimize(S, spones(A), show_trace=false)
+Sigma_Xopt, Aopt, Sigma_Lopt = gradient_optimize(S, spones(A), show_trace=false, iterations=100)
 @test loglikelihood(S, Sigma_Xopt, Aopt, Sigma_Lopt) > truthLL
