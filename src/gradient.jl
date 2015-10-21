@@ -62,24 +62,24 @@ function loglikelihood(S::AbstractMatrix, Sigma_X::SparseMatrixCSC, A::SparseMat
     #if eigmin(tmp) <= 0.0 return -1e16 end
     logdetSigma = nothing
     try
-        logdetSigma = sum(log(Sigma_X.nzval)) + logdet(tmp) #+ #rho*sum(abs(Sigma_L))
+        logdetSigma = sum(log(Sigma_X.nzval)) + logdet(tmp)
     catch
         return -1e16
     end
     B = R*Sigma_L
     C = Sigma_Xinv - Sigma_Xinv*A*B*A'*Sigma_Xinv
-    -(logdetSigma + trace(S*C))
+    -logdetSigma - trace(S*C) - rho*trace(Sigma_L*Sigma_L)
 end
-function loglikelihood_slow(S::AbstractMatrix, Sigma_X::SparseMatrixCSC, A::SparseMatrixCSC, Sigma_L::AbstractMatrix)
+function loglikelihood_slow(S::AbstractMatrix, Sigma_X::SparseMatrixCSC, A::SparseMatrixCSC, Sigma_L::AbstractMatrix, rho=0.0)
     Sigma = Sigma_X + A*Sigma_L*A'
     Theta = inv(Sigma)
     if minimum(real(eigvals(Theta))) < 0.0
         return -1e16
     end
-    logdet(Theta) - trace(S*Theta)
+    logdet(Theta) - trace(S*Theta) - rho*trace(Sigma_L*Sigma_L)
 end
 
-function gradient(S::AbstractMatrix, Sigma_X::SparseMatrixCSC, A::SparseMatrixCSC, Sigma_L::AbstractMatrix)
+function gradient(S::AbstractMatrix, Sigma_X::SparseMatrixCSC, A::SparseMatrixCSC, Sigma_L::AbstractMatrix, rho=0.0)
 
     # invert Sigma_X efficiently
     Sigma_Xtmp = deepcopy(Sigma_X)
@@ -94,7 +94,7 @@ function gradient(S::AbstractMatrix, Sigma_X::SparseMatrixCSC, A::SparseMatrixCS
     E = C - C*D
     G = E*A
     dA_dense = -2*G*Sigma_L
-    dSigma_L = -2*A'*G
+    dSigma_L = -2*A'*G - 4*rho*Sigma_L
     dSigma_X = Sigma_Xtmp
     dSigma_X.nzval[:] = -diag(E)
 
@@ -110,13 +110,13 @@ function gradient(S::AbstractMatrix, Sigma_X::SparseMatrixCSC, A::SparseMatrixCS
 
     dSigma_X, dA, dSigma_L
 end
-function gradient_slow(S::AbstractMatrix, Sigma_X::SparseMatrixCSC, A::SparseMatrixCSC, Sigma_L::AbstractMatrix)
+function gradient_slow(S::AbstractMatrix, Sigma_X::SparseMatrixCSC, A::SparseMatrixCSC, Sigma_L::AbstractMatrix, rho=0.0)
     Sigma = Sigma_X + A*Sigma_L*A'
     Theta = inv(Sigma)
 
     tmp = Theta*(S - Sigma)*Theta
     dA_dense = 2*tmp*A*Sigma_L
-    dSigma_L = 2*A'*tmp*A
+    dSigma_L = 2*A'*tmp*A - 4*rho*Sigma_L
     dSigma_X = spdiagm(diag(tmp))
 
     dA = deepcopy(A)

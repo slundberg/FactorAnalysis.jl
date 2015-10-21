@@ -62,6 +62,45 @@ for col = 1:K
     end
 end
 
+# gradient with rho (compare to finite difference)
+dSigma_X, dA, dSigma_L = gradient(S, Sigma_X, A, Sigma_L, 0.1)
+dSigma_X2, dA2, dSigma_L2 = FactorAnalysis.gradient_slow(S, Sigma_X, A, Sigma_L, 0.1)
+eps = 1e-6
+for i in 1:P
+    tmp = Sigma_X[i,i]
+    Sigma_X[i,i] = tmp + eps
+    l1 = loglikelihood(S, Sigma_X, A, Sigma_L, 0.1)
+    Sigma_X[i,i] = tmp - eps
+    l2 = loglikelihood(S, Sigma_X, A, Sigma_L, 0.1)
+    Sigma_X[i,i] = tmp
+    @test abs(dSigma_X2[i,i] - (l1-l2)/(2*eps)) < 1e-6
+    @test abs(dSigma_X[i,i] - (l1-l2)/(2*eps)) < 1e-6
+end
+for i in 1:K, j in i+1:K,
+    tmp = Sigma_L[i,j]
+    Sigma_L[i,j] = Sigma_L[j,i] = tmp + eps
+    l1 = loglikelihood(S, Sigma_X, A, Sigma_L, 0.1)
+    Sigma_L[i,j] = Sigma_L[j,i] = tmp - eps
+    l2 = loglikelihood(S, Sigma_X, A, Sigma_L, 0.1)
+    Sigma_L[i,j] = Sigma_L[j,i] = tmp
+    @test abs(dSigma_L2[i,j] - (l1-l2)/(2*eps)) < 1e-6
+    @test abs(dSigma_L[i,j] - (l1-l2)/(2*eps)) < 1e-6
+end
+rows = rowvals(A)
+vals = nonzeros(A)
+for col = 1:K
+    for j in nzrange(A, col)
+        tmp = vals[j]
+        vals[j] = tmp + eps
+        l1 = loglikelihood(S, Sigma_X, A, Sigma_L, 0.1)
+        vals[j] = tmp - eps
+        l2 = loglikelihood(S, Sigma_X, A, Sigma_L, 0.1)
+        vals[j] = tmp
+        @test abs(dA[rows[j],col] - (l1-l2)/(2*eps)) < 1e-6
+        @test abs(dA2[rows[j],col] - (l1-l2)/(2*eps)) < 1e-6
+    end
+end
+
 @time for i in 1:10000
     gradient(S, Sigma_X, A, Sigma_L)
 end
