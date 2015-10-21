@@ -52,7 +52,7 @@ S - The sample covariance matrix.
 function loglikelihood(S::AbstractMatrix, Sigma_X::SparseMatrixCSC, A::SparseMatrixCSC, Sigma_L::AbstractMatrix)
 
     # invert Sigma_X efficiently
-    if minimum(Sigma_X.nzval) <= 0.0 return -1e16 end
+    #if minimum(Sigma_X.nzval) <= 0.0 return -1e16 end
     Sigma_Xinv = deepcopy(Sigma_X)
     Sigma_Xinv.nzval[:] = 1 ./ Sigma_Xinv.nzval
 
