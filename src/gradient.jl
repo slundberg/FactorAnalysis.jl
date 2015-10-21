@@ -50,6 +50,27 @@ S - The sample covariance matrix.
 
 """
 function loglikelihood(S::AbstractMatrix, Sigma_X::SparseMatrixCSC, A::SparseMatrixCSC, Sigma_L::AbstractMatrix)
+
+    # invert Sigma_X efficiently
+    if minimum(Sigma_X.nzval) <= 0.0 return -1e16 end
+    Sigma_Xinv = deepcopy(Sigma_X)
+    Sigma_Xinv.nzval[:] = 1 ./ Sigma_Xinv.nzval
+
+    Gamma = A'*Sigma_Xinv*A
+    tmp = eye(size(Gamma)[1]) + Sigma_L*Gamma
+    R = inv(tmp)
+    #if eigmin(tmp) <= 0.0 return -1e16 end
+    logdetSigma = nothing
+    try
+        logdetSigma = sum(log(Sigma_X.nzval)) + logdet(tmp)
+    catch
+        return -1e16
+    end
+    B = R*Sigma_L
+    C = Sigma_Xinv - Sigma_Xinv*A*B*A'*Sigma_Xinv
+    -(logdetSigma + trace(S*C))
+end
+function loglikelihood_slow(S::AbstractMatrix, Sigma_X::SparseMatrixCSC, A::SparseMatrixCSC, Sigma_L::AbstractMatrix)
     Sigma = Sigma_X + A*Sigma_L*A'
     Theta = inv(Sigma)
     if minimum(real(eigvals(Theta))) < 0.0
@@ -57,21 +78,39 @@ function loglikelihood(S::AbstractMatrix, Sigma_X::SparseMatrixCSC, A::SparseMat
     end
     logdet(Theta) - trace(S*Theta)
 end
-function loglikelihood(S::AbstractMatrix, Sigma_X::DenseMatrix, A::DenseMatrix, Sigma_L::AbstractMatrix)
-    Sigma = Sigma_X + A*Sigma_L*A'
-    Theta = inv(Sigma)
-    if minimum(eigvals(Theta)) < 0.0
-        return -1e16
-    end
-    # rather than throwing exceptions we treat invalid parameters as very unlikely
-    try
-        return logdet(Theta) - trace(S*Theta)
-    catch e
-        return -1e16
-    end
-end
 
 function gradient(S::AbstractMatrix, Sigma_X::SparseMatrixCSC, A::SparseMatrixCSC, Sigma_L::AbstractMatrix)
+
+    # invert Sigma_X efficiently
+    Sigma_Xtmp = deepcopy(Sigma_X)
+    Sigma_Xtmp.nzval[:] = 1 ./ Sigma_Xtmp.nzval
+
+    Gamma = A'*Sigma_Xtmp*A
+    tmp = eye(size(Gamma)[1]) + Sigma_L*Gamma
+    R = inv(tmp)
+    B = R*Sigma_L
+    C = Sigma_Xtmp - Sigma_Xtmp*A*B*A'*Sigma_Xtmp
+    D = S*C
+    E = C - C*D
+    G = E*A
+    dA_dense = -2*G*Sigma_L
+    dSigma_L = -2*A'*G
+    dSigma_X = Sigma_Xtmp
+    dSigma_X.nzval[:] = -diag(E)
+
+    dA = deepcopy(A)
+    rows = rowvals(dA)
+    vals = nonzeros(dA)
+    K = size(dA)[2]
+    for col = 1:K
+        for j in nzrange(dA, col)
+            vals[j] = dA_dense[rows[j],col]
+        end
+    end
+
+    dSigma_X, dA, dSigma_L
+end
+function gradient_slow(S::AbstractMatrix, Sigma_X::SparseMatrixCSC, A::SparseMatrixCSC, Sigma_L::AbstractMatrix)
     Sigma = Sigma_X + A*Sigma_L*A'
     Theta = inv(Sigma)
 
