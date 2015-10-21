@@ -52,7 +52,11 @@ S - The sample covariance matrix.
 function loglikelihood(S::AbstractMatrix, Sigma_X::SparseMatrixCSC, A::SparseMatrixCSC, Sigma_L::AbstractMatrix)
     Sigma = Sigma_X + A*Sigma_L*A'
     Theta = inv(Sigma)
-    if eigmin(Theta) < 0.0
+    try
+        if eigmin(Theta) < 0.0
+            return -1e16
+        end
+    catch
         return -1e16
     end
     logdet(Theta) - trace(S*Theta)
