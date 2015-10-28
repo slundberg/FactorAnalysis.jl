@@ -72,11 +72,18 @@ function loglikelihood(S::AbstractMatrix, Sigma_X::SparseMatrixCSC, A::SparseMat
 end
 function loglikelihood_slow(S::AbstractMatrix, Sigma_X::SparseMatrixCSC, A::SparseMatrixCSC, Sigma_L::AbstractMatrix, rho=0.0)
     Sigma = Sigma_X + A*Sigma_L*A'
+
+    # invert Sigma_X efficiently
+    Theta_X = deepcopy(Sigma_X)
+    Theta_X.nzval[:] = 1 ./ Theta_X.nzval
+
+    Theta_L = inv(Sigma_L)
+
     Theta = inv(Sigma)
     if minimum(real(eigvals(Theta))) < 0.0
         return -1e16
     end
-    logdet(Theta) - trace(S*Theta) - rho*trace(Sigma_L*Sigma_L)
+    logdet(Theta) - trace(S*Theta) - rho*(sum(Theta_X.^2) + sum(A.^2) + sum(Theta_L.^2))# + + sum(Theta_X.^2) + sum(A.^2) + sum(Sigma_L.^2)
 end
 
 function gradient(S::AbstractMatrix, Sigma_X::SparseMatrixCSC, A::SparseMatrixCSC, Sigma_L::AbstractMatrix, rho=0.0)
@@ -114,10 +121,16 @@ function gradient_slow(S::AbstractMatrix, Sigma_X::SparseMatrixCSC, A::SparseMat
     Sigma = Sigma_X + A*Sigma_L*A'
     Theta = inv(Sigma)
 
+    # invert Sigma_X efficiently
+    Theta_X = deepcopy(Sigma_X)
+    Theta_X.nzval[:] = 1 ./ Theta_X.nzval
+
+    Theta_L = inv(Sigma_L)
+
     tmp = Theta*(S - Sigma)*Theta
-    dA_dense = 2*tmp*A*Sigma_L
-    dSigma_L = 2*A'*tmp*A - 4*rho*Sigma_L
-    dSigma_X = spdiagm(diag(tmp))
+    dA_dense = 2*(tmp*A*Sigma_L - rho*A)
+    dSigma_L = 2*(A'*tmp*A + 2*rho*Theta_L^3)
+    dSigma_X = spdiagm(diag(tmp + 2*rho*Theta_X^3))
 
     dA = deepcopy(A)
     rows = rowvals(dA)

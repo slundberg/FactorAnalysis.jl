@@ -8,8 +8,8 @@ function randcor(K, netDensity)
         IC[j,i] = IC[i,j]
     end
     mineval = minimum(eig(IC)[1])
-    if mineval < 0
-        IC -= eye(K)*mineval*1.001
+    if mineval < 0.01
+        IC -= eye(K)*mineval*1.1
     end
     C = inv(IC)
     Base.cov2cor!(C, sqrt(diag(C)))
