@@ -102,37 +102,7 @@ truthLL = loglikelihood(d, S, N)
 dopt = fit_mle(CFADistributionTheta, spones(A), S, N, show_trace=false, iterations=2000)
 @test loglikelihood(dopt, S, N) > truthLL
 
-function upper(X::AbstractMatrix)
-    x = Float64[]
-    for i in 1:size(X)[1], j in i+1:size(X)[2]
-        push!(x, X[i,j])
-    end
-    x
-end
-function area_under_pr(truth::AbstractVector, predictor::AbstractVector; resolution=4000)
-    rocData = MLBase.roc(round(Int64, truth), float(invperm(sortperm(predictor))), resolution)
-    vals = collect(map(x->(recall(x), -precision(x)), rocData))
-    sort!(vals)
-    xvals = map(x->x[1], vals)
-    yvals = map(x->-x[2], vals)
-    area_under_curve(xvals, yvals)
-end
-function area_under_curve(x, y) # must be sorted by increasing x
-    area = 0.0
-    lastVal = NaN
-    for i in 2:length(x)
-        v = (y[i-1]+y[i])/2 * (x[i]-x[i-1])
-        if !isnan(v)
-            area += v
-            lastVal = v
-        elseif !isnan(lastVal)
-            area += lastVal
-        end
-    end
-    area
-end
-
-@test area_under_pr(abs(upper(Theta_L)) .> 0.01, abs(upper(dopt.Theta_L))) > 0.9
+@test FactorAnalysis.area_under_pr(abs(FactorAnalysis.upper(Theta_L)) .> 0.01, abs(FactorAnalysis.upper(dopt.Theta_L))) > 0.9
 
 # a = collect(zip(abs(upper(Theta_L)) .> 0.01, abs(upper(dopt.Theta_L)), 1:length(upper(Theta_L))))
 # for v in sort(a, by=x->x[2])
@@ -145,7 +115,7 @@ dopt2 = fit_map(Normal(0, 1.0), CFADistributionTheta, spones(A), S, N, show_trac
 @test loglikelihood(dopt2, S, N) > truthLL
 
 FactorAnalysis.normalize_Sigma_L!(dopt2)
-@test area_under_pr(abs(upper(Theta_L)) .> 0.01, abs(upper(dopt2.Theta_L))) > 0.9
+@test FactorAnalysis.area_under_pr(abs(FactorAnalysis.upper(Theta_L)) .> 0.01, abs(FactorAnalysis.upper(dopt2.Theta_L))) > 0.9
 
 # display(Theta_L)
 # println()

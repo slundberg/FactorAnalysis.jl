@@ -10,12 +10,12 @@ type CFADistributionTheta
 end
 Base.length(d::CFADistributionTheta) = Int(size(d.A)[1] + nnz(d.A) + (size(d.A)[2]-1)*size(d.A)[2]/2)
 
-"Likelihood of model given then data represented by the covariance S from N samples"
+"Likelihood of model given the data represented by the covariance S from N samples"
 function Distributions.loglikelihood(d::CFADistributionTheta, S::AbstractMatrix, N::Int64)
     @assert minimum(d.Theta_X.nzval) > 0.0 "Invalid CFADistributionTheta! (Theta_X has elements <= 0)"
     @assert minimum(eig(d.Theta_L)[1]) > 0.0 "Invalid CFADistributionTheta! (Theta_L has eigen value <= 0)"
 
-    # Woodbury transformation of orignal form allows us to only compute a KxK inversion
+    # Woodbury transformation of original form allows us to only compute a KxK inversion
     Theta = d.Theta_X - d.Theta_X*d.A*inv(d.Theta_L + d.A'*d.Theta_X*d.A)*d.A'*d.Theta_X
 
     v = logdet(Theta) - trace(S*Theta)
@@ -106,77 +106,8 @@ function state2vec!(x::AbstractVector, d::Union{CFADistributionTheta,CFADistribu
         pos += 1
     end
 end
-# function state2vec!(x::AbstractVector, Sigma_X::SparseMatrixCSC, A::SparseMatrixCSC, Sigma_L::AbstractMatrix)
-#     P = length(Sigma_X.nzval)
-#     x[1:P] = Sigma_X.nzval
-#
-#     offest = length(A.nzval)
-#     x[P+1:P+offest] = A.nzval
-#
-#     pos = P+offest+1
-#     K = size(Sigma_L)[1]
-#     for i in 1:K, j in i+1:K
-#         x[pos] = Sigma_L[i,j]
-#         pos += 1
-#     end
-# end
 
 
-
-# function loglikelihood_fast(S::AbstractMatrix, Sigma_X::SparseMatrixCSC, A::SparseMatrixCSC, Sigma_L::AbstractMatrix, rho=0.0)
-#
-#     # invert Sigma_X efficiently
-#     #if minimum(Sigma_X.nzval) <= 0.0 return -1e16 end
-#     Sigma_Xinv = deepcopy(Sigma_X)
-#     Sigma_Xinv.nzval[:] = 1 ./ Sigma_Xinv.nzval
-#
-#     Gamma = A'*Sigma_Xinv*A
-#     tmp = eye(size(Gamma)[1]) + Sigma_L*Gamma
-#     R = inv(tmp)
-#     #if eigmin(tmp) <= 0.0 return -1e16 end
-#     logdetSigma = nothing
-#     try
-#         logdetSigma = sum(log(Sigma_X.nzval)) + logdet(tmp)
-#     catch
-#         return -1e16
-#     end
-#     B = R*Sigma_L
-#     C = Sigma_Xinv - Sigma_Xinv*A*B*A'*Sigma_Xinv
-#     -logdetSigma - trace(S*C) - rho*trace(Sigma_L*Sigma_L)
-# end
-
-
-# function gradient_fast(S::AbstractMatrix, Sigma_X::SparseMatrixCSC, A::SparseMatrixCSC, Sigma_L::AbstractMatrix, rho=0.0)
-#
-#     # invert Sigma_X efficiently
-#     Sigma_Xtmp = deepcopy(Sigma_X)
-#     Sigma_Xtmp.nzval[:] = 1 ./ Sigma_Xtmp.nzval
-#
-#     Gamma = A'*Sigma_Xtmp*A
-#     tmp = eye(size(Gamma)[1]) + Sigma_L*Gamma
-#     R = inv(tmp)
-#     B = R*Sigma_L
-#     C = Sigma_Xtmp - Sigma_Xtmp*A*B*A'*Sigma_Xtmp
-#     D = S*C
-#     E = C - C*D
-#     G = E*A
-#     dA_dense = -2*G*Sigma_L
-#     dSigma_L = -2*A'*G - 4*rho*Sigma_L
-#     dSigma_X = Sigma_Xtmp
-#     dSigma_X.nzval[:] = -diag(E)
-#
-#     dA = deepcopy(A)
-#     rows = rowvals(dA)
-#     vals = nonzeros(dA)
-#     K = size(dA)[2]
-#     for col = 1:K
-#         for j in nzrange(dA, col)
-#             vals[j] = dA_dense[rows[j],col]
-#         end
-#     end
-#
-#     dSigma_X, dA, dSigma_L
-# end
 function dloglikelihood(d::CFADistributionTheta, S::AbstractMatrix, N::Int64)
     P,K = size(d.A)
 

@@ -22,7 +22,7 @@ function Base.rand(d::CFADistributionSigma, N::Int)
 end
 Base.rand(d::CFADistributionSigma) = rand(d::CFADistributionSigma, 1)
 
-"Likelihood of model given then data represented by the covariance S from N samples"
+"Likelihood of model given the data represented by the covariance S from N samples"
 function Distributions.loglikelihood(d::CFADistributionSigma, S::AbstractMatrix, N::Int64)
     #@assert minimum(d.Sigma_X.nzval) > 0.0 "Invalid CFADistributionSigma! (Theta_X has elements <= 0)"
     #@assert minimum(eig(d.Sigma_L)[1]) > 0.0 "Invalid CFADistributionSigma! (Theta_L has eigen value <= 0)"
