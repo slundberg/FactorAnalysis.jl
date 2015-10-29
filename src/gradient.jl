@@ -22,7 +22,7 @@ function vec2state!(d::Union{CFADistribution,CFADistributionGradient}, x::Abstra
 
     pos = P+offset+1
     K = size(d.Theta_L)[1]
-    for i in 1:K, j in i+1:K
+    for i in 1:K, j in i:K
         d.Theta_L[i,j] = d.Theta_L[j,i] = x[pos]
         pos += 1
     end
@@ -54,7 +54,7 @@ function state2vec!(x::AbstractVector, d::Union{CFADistribution,CFADistributionG
 
     pos = P+offest+1
     K = size(d.Theta_L)[1]
-    for i in 1:K, j in i+1:K
+    for i in 1:K, j in i:K
         x[pos] = d.Theta_L[i,j]
         pos += 1
     end
@@ -131,6 +131,7 @@ end
 #     dSigma_X, dA, dSigma_L
 # end
 function dloglikelihood(d::CFADistribution, S::AbstractMatrix, N::Int64)
+    P,K = size(d.A)
 
     # Woodbury transformation of orignal form allows us to only compute a KxK inversion
     Theta = d.Theta_X - d.Theta_X*d.A*inv(d.Theta_L + d.A'*d.Theta_X*d.A)*d.A'*d.Theta_X
@@ -143,7 +144,11 @@ function dloglikelihood(d::CFADistribution, S::AbstractMatrix, N::Int64)
     dTheta_X = spdiagm(diag(Theta_Xinv*commonPart*Theta_Xinv))
 
     Theta_Linv = inv(d.Theta_L)
-    dTheta_L = 2*Theta_Linv*d.A'*commonPart*d.A*Theta_Linv # diagonals should not be times 2 but we don't use them
+    dTheta_L = 2*Theta_Linv*d.A'*commonPart*d.A*Theta_Linv
+    #dTheta_Linv = 2*d.A'*commonPart*d.A
+    #for i in 1:K dTheta_Linv[i,i] = 0.0 end # we shouldn't change the diagonal of the covariance matrix
+    #dTheta_L = Theta_Linv*dTheta_Linv*Theta_Linv
+    for i in 1:size(dTheta_L)[1] dTheta_L[i,i] /= 2 end # diagonals should not be times 2
 
     dA_dense = -2*commonPart*d.A*Theta_Linv
     dA = deepcopy(d.A)
@@ -164,7 +169,7 @@ function Distributions.fit_mle(::Type{CFADistribution}, A::SparseMatrixCSC, S::A
 
     # init our parameters
     d = CFADistribution(speye(P), deepcopy(A), eye(K))
-    x_init = zeros(Int(P + nnz(A) + (K-1)*K/2))
+    x_init = zeros(Int(P + nnz(A) + (K+1)*K/2))
     state2vec!(x_init, d)
 
     function f(x)
@@ -201,7 +206,7 @@ function fit_map(pri::Normal, ::Type{CFADistribution}, A::SparseMatrixCSC, S::Ab
 
     # init our parameters
     d = CFADistribution(speye(P), deepcopy(A), eye(K))
-    x_init = zeros(Int(P + nnz(A) + (K-1)*K/2))
+    x_init = zeros(Int(P + nnz(A) + (K+1)*K/2))
     state2vec!(x_init, d)
 
     function f(x)

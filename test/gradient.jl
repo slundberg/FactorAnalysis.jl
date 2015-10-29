@@ -8,7 +8,7 @@ A = sparse(1:P, Int64[ceil(i/2) for i in 1:P], ones(P))
 Theta_L = inv(FactorAnalysis.randcor(K, 0.2))
 
 d = CFADistribution(Theta_X, A, Theta_L)
-x = zeros(P + length(A.nzval) + div((K-1)*K,2))
+x = zeros(P + length(A.nzval) + div((K+1)*K,2))
 FactorAnalysis.state2vec!(x, d)
 x_copy = copy(x)
 FactorAnalysis.vec2state!(d, x)
@@ -16,7 +16,7 @@ FactorAnalysis.state2vec!(x, d)
 @test maximum(abs(x .- x_copy)) <= 1e-8
 
 g = FactorAnalysis.CFADistributionGradient(Theta_X, A, Theta_L)
-x = zeros(P + length(A.nzval) + div((K-1)*K,2))
+x = zeros(P + length(A.nzval) + div((K+1)*K,2))
 FactorAnalysis.state2vec!(x, g)
 x_copy = copy(x)
 FactorAnalysis.vec2state!(g, x)
@@ -49,16 +49,24 @@ for i in 1:P
     @test abs(g.Theta_X[i,i] - (l1-l2)/(2*eps)) < tol
     #@test abs(dTheta_X[i,i] - (l1-l2)/(2*eps)) < tol
 end
-for i in 1:K, j in i+1:K,
-    tmp = Theta_L[i,j]
-    Theta_L[i,j] = Theta_L[j,i] = tmp + eps
-    l1 = loglikelihood(CFADistribution(Theta_X, A, Theta_L), S, N)
-    Theta_L[i,j] = Theta_L[j,i] = tmp - eps
-    l2 = loglikelihood(CFADistribution(Theta_X, A, Theta_L), S, N)
-    Theta_L[i,j] = Theta_L[j,i] = tmp
-    @test abs(g.Theta_L[i,j] - (l1-l2)/(2*eps)) < tol
-    #@test abs(dTheta_L[i,j] - (l1-l2)/(2*eps)) < tol
-end
+# for i in 1:K, j in i:K
+#     tmpTheta_L = deepcopy(Theta_L)
+#     tmpTheta_L[i,j] = tmpTheta_L[j,i] = tmpTheta_L[i,j] + eps
+#     tmpTheta_L = inv(tmpTheta_L)
+#     Base.cov2cor!(tmpTheta_L, sqrt(diag(tmpTheta_L)))
+#     tmpTheta_L = inv(tmpTheta_L)
+#     l1 = loglikelihood(CFADistribution(Theta_X, A, Theta_L), S, N)
+#
+#     tmpTheta_L = deepcopy(Theta_L)
+#     tmpTheta_L[i,j] = tmpTheta_L[j,i] = tmpTheta_L[i,j] - eps
+#     tmpTheta_L = inv(tmpTheta_L)
+#     Base.cov2cor!(tmpTheta_L, sqrt(diag(tmpTheta_L)))
+#     tmpTheta_L = inv(tmpTheta_L)
+#     l2 = loglikelihood(CFADistribution(Theta_X, A, Theta_L), S, N)
+#
+#     @test abs(g.Theta_L[i,j] - (l1-l2)/(2*eps)) < tol
+#     #@test abs(dTheta_L[i,j] - (l1-l2)/(2*eps)) < tol
+# end
 rows = rowvals(A)
 vals = nonzeros(A)
 for col = 1:K
@@ -97,6 +105,11 @@ truthLL = loglikelihood(d, S, N)
 dopt = fit_mle(CFADistribution, spones(A), S, N, show_trace=false, iterations=1000)
 @test loglikelihood(dopt, S, N) > truthLL
 
+display(Theta_L)
+display(dopt.Theta_L)
+
 dopt2 = fit_map(Normal(0, 1.1), CFADistribution, spones(A), S, N, show_trace=false, iterations=1000)
 @test loglikelihood(dopt2, S, N) < loglikelihood(dopt, S, N)
 @test loglikelihood(dopt2, S, N) > truthLL
+
+#display(Theta_L)
