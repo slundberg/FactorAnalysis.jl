@@ -27,3 +27,16 @@ function Base.rand(d::CFADistribution, N::Int)
     X
 end
 Base.rand(d::CFADistribution) = rand(d::CFADistribution, 1)
+
+function normalize_Sigma_L!(d::CFADistribution)
+    Sigma_L = inv(d.Theta_L)
+    scaling = sqrt(diag(Sigma_L))
+    d.Theta_L[:,:] = inv(Base.cov2cor!(Sigma_L, scaling))
+    vals = nonzeros(d.A)
+    K = size(d.A)[2]
+    for col = 1:K
+        for j in nzrange(d.A, col)
+            vals[j] *= scaling[col]
+        end
+    end
+end

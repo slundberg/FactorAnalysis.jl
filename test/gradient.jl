@@ -1,8 +1,9 @@
+using MLBase
 
 # vec2state! and state2vec!
 srand(10)
-P = 20
-K = 10
+P = 40
+K = 20
 Theta_X = spdiagm(1 ./ (rand(P) .+ 0.2))
 A = sparse(1:P, Int64[ceil(i/2) for i in 1:P], ones(P))
 Theta_L = inv(FactorAnalysis.randcor(K, 0.2))
@@ -25,7 +26,7 @@ FactorAnalysis.state2vec!(x, g)
 
 
 # likelihood
-N = 1000
+N = 10000
 X = rand(d, N)
 S = X*X' / N
 Base.cov2cor!(S, sqrt(diag(S)))
@@ -102,14 +103,63 @@ end
 
 # gradient_optimize
 truthLL = loglikelihood(d, S, N)
-dopt = fit_mle(CFADistribution, spones(A), S, N, show_trace=false, iterations=1000)
+dopt = fit_mle(CFADistribution, spones(A), S, N, show_trace=false, iterations=2000)
 @test loglikelihood(dopt, S, N) > truthLL
 
-display(Theta_L)
-display(dopt.Theta_L)
+function upper(X::AbstractMatrix)
+    x = Float64[]
+    for i in 1:size(X)[1], j in i+1:size(X)[2]
+        push!(x, X[i,j])
+    end
+    x
+end
+function area_under_pr(truth::AbstractVector, predictor::AbstractVector; resolution=4000)
+    rocData = MLBase.roc(round(Int64, truth), float(invperm(sortperm(predictor))), resolution)
+    vals = collect(map(x->(recall(x), -precision(x)), rocData))
+    sort!(vals)
+    xvals = map(x->x[1], vals)
+    yvals = map(x->-x[2], vals)
+    area_under_curve(xvals, yvals)
+end
+function area_under_curve(x, y) # must be sorted by increasing x
+    area = 0.0
+    lastVal = NaN
+    for i in 2:length(x)
+        v = (y[i-1]+y[i])/2 * (x[i]-x[i-1])
+        if !isnan(v)
+            area += v
+            lastVal = v
+        elseif !isnan(lastVal)
+            area += lastVal
+        end
+    end
+    area
+end
 
-dopt2 = fit_map(Normal(0, 1.1), CFADistribution, spones(A), S, N, show_trace=false, iterations=1000)
+@test area_under_pr(abs(upper(Theta_L)) .> 0.01, abs(upper(dopt.Theta_L))) > 0.9
+
+# a = collect(zip(abs(upper(Theta_L)) .> 0.01, abs(upper(dopt.Theta_L)), 1:length(upper(Theta_L))))
+# for v in sort(a, by=x->x[2])
+#     println(v)
+# end
+
+dopt2 = fit_map(Normal(0, 1.0), CFADistribution, spones(A), S, N, show_trace=false, iterations=2000)
 @test loglikelihood(dopt2, S, N) < loglikelihood(dopt, S, N)
 @test loglikelihood(dopt2, S, N) > truthLL
 
-#display(Theta_L)
+FactorAnalysis.normalize_Sigma_L!(dopt2)
+@test area_under_pr(abs(upper(Theta_L)) .> 0.01, abs(upper(dopt2.Theta_L))) > 0.9
+
+# display(Theta_L)
+# println()
+# display(dopt.Theta_L)
+# println()
+# display(dopt2.Theta_L)
+#
+# dopt3 = fit_map(Normal(0, 0.001), CFADistribution, spones(A), S, N, show_trace=true, iterations=20000)
+# FactorAnalysis.normalize_Sigma_L!(dopt3)
+# println()
+# display(dopt3.Theta_L)
+# println()
+# println(area_under_pr(abs(upper(Theta_L)) .> 0.01, abs(upper(dopt3.Theta_L))))
+# upper(upper)

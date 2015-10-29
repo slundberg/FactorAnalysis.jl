@@ -154,7 +154,6 @@ function dloglikelihood(d::CFADistribution, S::AbstractMatrix, N::Int64)
     dA = deepcopy(d.A)
     rows = rowvals(dA)
     vals = nonzeros(dA)
-    K = size(dA)[2]
     for col = 1:K
         for j in nzrange(dA, col)
             vals[j] = dA_dense[rows[j],col]
@@ -196,6 +195,9 @@ function Distributions.fit_mle(::Type{CFADistribution}, A::SparseMatrixCSC, S::A
     )
 
     vec2state!(d, res.minimum)
+
+    # rescale X and Theta_L so that Sigma_L is a correlation matrix
+    normalize_Sigma_L!(d)
     d
 end
 
@@ -221,7 +223,7 @@ function fit_map(pri::Normal, ::Type{CFADistribution}, A::SparseMatrixCSC, S::Ab
         end
 
         # account for prior
-        ll -= rho*sum(d.Theta_X.^2)
+        #ll -= rho*sum(d.Theta_X.^2)
         ll -= rho*sum(d.A.^2)
         ll -= rho*sum(d.Theta_L.^2)
 
@@ -235,7 +237,7 @@ function fit_map(pri::Normal, ::Type{CFADistribution}, A::SparseMatrixCSC, S::Ab
         gState = dloglikelihood(d, S, N)
 
         # account for prior
-        gState.Theta_X .-= 2*rho*d.Theta_X
+        #gState.Theta_X .-= 2*rho*d.Theta_X
         gState.A .-= 2*rho*d.A
         gState.Theta_L .-= 2*rho*d.Theta_L
 
