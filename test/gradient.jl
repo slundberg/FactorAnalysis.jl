@@ -50,24 +50,15 @@ for i in 1:P
     @test abs(g.Theta_X[i,i] - (l1-l2)/(2*eps)) < tol
     #@test abs(dTheta_X[i,i] - (l1-l2)/(2*eps)) < tol
 end
-# for i in 1:K, j in i:K
-#     tmpTheta_L = deepcopy(Theta_L)
-#     tmpTheta_L[i,j] = tmpTheta_L[j,i] = tmpTheta_L[i,j] + eps
-#     tmpTheta_L = inv(tmpTheta_L)
-#     Base.cov2cor!(tmpTheta_L, sqrt(diag(tmpTheta_L)))
-#     tmpTheta_L = inv(tmpTheta_L)
-#     l1 = loglikelihood(CFADistribution(Theta_X, A, Theta_L), S, N)
-#
-#     tmpTheta_L = deepcopy(Theta_L)
-#     tmpTheta_L[i,j] = tmpTheta_L[j,i] = tmpTheta_L[i,j] - eps
-#     tmpTheta_L = inv(tmpTheta_L)
-#     Base.cov2cor!(tmpTheta_L, sqrt(diag(tmpTheta_L)))
-#     tmpTheta_L = inv(tmpTheta_L)
-#     l2 = loglikelihood(CFADistribution(Theta_X, A, Theta_L), S, N)
-#
-#     @test abs(g.Theta_L[i,j] - (l1-l2)/(2*eps)) < tol
-#     #@test abs(dTheta_L[i,j] - (l1-l2)/(2*eps)) < tol
-# end
+for i in 1:K, j in i+1:K
+    tmp = Theta_L[i,j]
+    Theta_L[j,i] = Theta_L[i,j] = tmp + eps
+    l1 = loglikelihood(CFADistribution(Theta_X, A, Theta_L), S, N)
+    Theta_L[j,i] = Theta_L[i,j] = tmp - eps
+    l2 = loglikelihood(CFADistribution(Theta_X, A, Theta_L), S, N)
+    Theta_L[j,i] = Theta_L[i,j] = tmp
+    @test abs(g.Theta_L[j,i] - (l1-l2)/(2*eps)) < tol
+end
 rows = rowvals(A)
 vals = nonzeros(A)
 for col = 1:K
