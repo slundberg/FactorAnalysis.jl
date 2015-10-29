@@ -12,16 +12,18 @@ function randcor(K, netDensity)
         IC -= eye(K)*mineval*1.1
     end
     C = inv(IC)
+
     Base.cov2cor!(C, sqrt(diag(C)))
 end
 
-function samples(Sigma_X::SparseMatrixCSC, A::SparseMatrixCSC, Sigma_L::AbstractMatrix, N::Int)
-    P,K = size(A)
-    distL = MvNormal(zeros(K), Sigma_L)
+function Base.rand(d::CFADistribution, N::Int)
+    P,K = size(d.A)
+    distL = MvNormal(zeros(K), inv(d.Theta_L))
     L = rand(distL, N)
-    X = A*L
+    X = d.A*L
     for i in 1:P
-        X[i,:] .+= transpose(rand(Normal(0, Sigma_X.nzval[i]), N))
+        X[i,:] .+= transpose(rand(Normal(0, 1 / d.Theta_X.nzval[i]), N))
     end
     X
 end
+Base.rand(d::CFADistribution) = rand(d::CFADistribution, 1)

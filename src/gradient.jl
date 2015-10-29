@@ -1,111 +1,152 @@
 using Optim
-using Distributions
 
-import Base.gradient
-import Distributions.loglikelihood
+#export vec2state!, state2vec!, loglikelihood, gradient, gradient_optimize
 
-export vec2state!, state2vec!, loglikelihood, gradient, gradient_optimize
+"Gradient of the CFA model."
+type CFADistributionGradient
+    Theta_X::SparseMatrixCSC
+    A::SparseMatrixCSC
+    Theta_L::AbstractMatrix
+end
+
 
 """
 Pulls values from a flattened vector into the full matrix state.
 """
-function vec2state!(Sigma_X::SparseMatrixCSC, A::SparseMatrixCSC, Sigma_L::AbstractMatrix, x::AbstractVector)
-    P = length(Sigma_X.nzval)
-    Sigma_X.nzval[:] = x[1:P]
+function vec2state!(d::Union{CFADistribution,CFADistributionGradient}, x::AbstractVector)
+    P = length(d.Theta_X.nzval)
+    d.Theta_X.nzval[:] = x[1:P]
 
-    offset = length(A.nzval)
-    A.nzval[:] = x[P+1:P+offset]
+    offset = length(d.A.nzval)
+    d.A.nzval[:] = x[P+1:P+offset]
 
     pos = P+offset+1
-    K = size(Sigma_L)[1]
+    K = size(d.Theta_L)[1]
     for i in 1:K, j in i+1:K
-        Sigma_L[i,j] = Sigma_L[j,i] = x[pos]
+        d.Theta_L[i,j] = d.Theta_L[j,i] = x[pos]
         pos += 1
     end
 end
+# function vec2state!(Sigma_X::SparseMatrixCSC, A::SparseMatrixCSC, Sigma_L::AbstractMatrix, x::AbstractVector)
+#     P = length(Sigma_X.nzval)
+#     Sigma_X.nzval[:] = x[1:P]
+#
+#     offset = length(A.nzval)
+#     A.nzval[:] = x[P+1:P+offset]
+#
+#     pos = P+offset+1
+#     K = size(Sigma_L)[1]
+#     for i in 1:K, j in i+1:K
+#         Sigma_L[i,j] = Sigma_L[j,i] = x[pos]
+#         pos += 1
+#     end
+# end
 
 """
 Pulls values from the full matrix state into a flattened vector.
 """
-function state2vec!(x::AbstractVector, Sigma_X::SparseMatrixCSC, A::SparseMatrixCSC, Sigma_L::AbstractMatrix)
-    P = length(Sigma_X.nzval)
-    x[1:P] = Sigma_X.nzval
+function state2vec!(x::AbstractVector, d::Union{CFADistribution,CFADistributionGradient})
+    P = length(d.Theta_X.nzval)
+    x[1:P] = d.Theta_X.nzval
 
-    offest = length(A.nzval)
-    x[P+1:P+offest] = A.nzval
+    offest = length(d.A.nzval)
+    x[P+1:P+offest] = d.A.nzval
 
     pos = P+offest+1
-    K = size(Sigma_L)[1]
+    K = size(d.Theta_L)[1]
     for i in 1:K, j in i+1:K
-        x[pos] = Sigma_L[i,j]
+        x[pos] = d.Theta_L[i,j]
         pos += 1
     end
 end
+# function state2vec!(x::AbstractVector, Sigma_X::SparseMatrixCSC, A::SparseMatrixCSC, Sigma_L::AbstractMatrix)
+#     P = length(Sigma_X.nzval)
+#     x[1:P] = Sigma_X.nzval
+#
+#     offest = length(A.nzval)
+#     x[P+1:P+offest] = A.nzval
+#
+#     pos = P+offest+1
+#     K = size(Sigma_L)[1]
+#     for i in 1:K, j in i+1:K
+#         x[pos] = Sigma_L[i,j]
+#         pos += 1
+#     end
+# end
 
 
-"""
-Evaluates the loglikelihood of the confirmatory model.
 
-S - The sample covariance matrix.
+# function loglikelihood_fast(S::AbstractMatrix, Sigma_X::SparseMatrixCSC, A::SparseMatrixCSC, Sigma_L::AbstractMatrix, rho=0.0)
+#
+#     # invert Sigma_X efficiently
+#     #if minimum(Sigma_X.nzval) <= 0.0 return -1e16 end
+#     Sigma_Xinv = deepcopy(Sigma_X)
+#     Sigma_Xinv.nzval[:] = 1 ./ Sigma_Xinv.nzval
+#
+#     Gamma = A'*Sigma_Xinv*A
+#     tmp = eye(size(Gamma)[1]) + Sigma_L*Gamma
+#     R = inv(tmp)
+#     #if eigmin(tmp) <= 0.0 return -1e16 end
+#     logdetSigma = nothing
+#     try
+#         logdetSigma = sum(log(Sigma_X.nzval)) + logdet(tmp)
+#     catch
+#         return -1e16
+#     end
+#     B = R*Sigma_L
+#     C = Sigma_Xinv - Sigma_Xinv*A*B*A'*Sigma_Xinv
+#     -logdetSigma - trace(S*C) - rho*trace(Sigma_L*Sigma_L)
+# end
 
-"""
-function loglikelihood(S::AbstractMatrix, Sigma_X::SparseMatrixCSC, A::SparseMatrixCSC, Sigma_L::AbstractMatrix, rho=0.0)
 
-    # invert Sigma_X efficiently
-    #if minimum(Sigma_X.nzval) <= 0.0 return -1e16 end
-    Sigma_Xinv = deepcopy(Sigma_X)
-    Sigma_Xinv.nzval[:] = 1 ./ Sigma_Xinv.nzval
+# function gradient_fast(S::AbstractMatrix, Sigma_X::SparseMatrixCSC, A::SparseMatrixCSC, Sigma_L::AbstractMatrix, rho=0.0)
+#
+#     # invert Sigma_X efficiently
+#     Sigma_Xtmp = deepcopy(Sigma_X)
+#     Sigma_Xtmp.nzval[:] = 1 ./ Sigma_Xtmp.nzval
+#
+#     Gamma = A'*Sigma_Xtmp*A
+#     tmp = eye(size(Gamma)[1]) + Sigma_L*Gamma
+#     R = inv(tmp)
+#     B = R*Sigma_L
+#     C = Sigma_Xtmp - Sigma_Xtmp*A*B*A'*Sigma_Xtmp
+#     D = S*C
+#     E = C - C*D
+#     G = E*A
+#     dA_dense = -2*G*Sigma_L
+#     dSigma_L = -2*A'*G - 4*rho*Sigma_L
+#     dSigma_X = Sigma_Xtmp
+#     dSigma_X.nzval[:] = -diag(E)
+#
+#     dA = deepcopy(A)
+#     rows = rowvals(dA)
+#     vals = nonzeros(dA)
+#     K = size(dA)[2]
+#     for col = 1:K
+#         for j in nzrange(dA, col)
+#             vals[j] = dA_dense[rows[j],col]
+#         end
+#     end
+#
+#     dSigma_X, dA, dSigma_L
+# end
+function dloglikelihood(d::CFADistribution, S::AbstractMatrix, N::Int64)
 
-    Gamma = A'*Sigma_Xinv*A
-    tmp = eye(size(Gamma)[1]) + Sigma_L*Gamma
-    R = inv(tmp)
-    #if eigmin(tmp) <= 0.0 return -1e16 end
-    logdetSigma = nothing
-    try
-        logdetSigma = sum(log(Sigma_X.nzval)) + logdet(tmp)
-    catch
-        return -1e16
-    end
-    B = R*Sigma_L
-    C = Sigma_Xinv - Sigma_Xinv*A*B*A'*Sigma_Xinv
-    -logdetSigma - trace(S*C) - rho*trace(Sigma_L*Sigma_L)
-end
-function loglikelihood_slow(S::AbstractMatrix, Sigma_X::SparseMatrixCSC, A::SparseMatrixCSC, Sigma_L::AbstractMatrix, rho=0.0)
-    Sigma = Sigma_X + A*Sigma_L*A'
+    # Woodbury transformation of orignal form allows us to only compute a KxK inversion
+    Theta = d.Theta_X - d.Theta_X*d.A*inv(d.Theta_L + d.A'*d.Theta_X*d.A)*d.A'*d.Theta_X
 
-    # invert Sigma_X efficiently
-    Theta_X = deepcopy(Sigma_X)
-    Theta_X.nzval[:] = 1 ./ Theta_X.nzval
+    commonPart = Theta - Theta*S*Theta
 
-    Theta_L = inv(Sigma_L)
+    # invert Sigma_X efficiently then compute gradient
+    Theta_Xinv = deepcopy(d.Theta_X)
+    Theta_Xinv.nzval[:] = 1 ./ Theta_Xinv.nzval
+    dTheta_X = spdiagm(diag(Theta_Xinv*commonPart*Theta_Xinv))
 
-    Theta = inv(Sigma)
-    if minimum(real(eigvals(Theta))) < 0.0
-        return -1e16
-    end
-    logdet(Theta) - trace(S*Theta) - rho*(sum(Theta_X.^2) + sum(A.^2) + sum(Theta_L.^2))# + + sum(Theta_X.^2) + sum(A.^2) + sum(Sigma_L.^2)
-end
+    Theta_Linv = inv(d.Theta_L)
+    dTheta_L = 2*Theta_Linv*d.A'*commonPart*d.A*Theta_Linv # diagonals should not be times 2 but we don't use them
 
-function gradient(S::AbstractMatrix, Sigma_X::SparseMatrixCSC, A::SparseMatrixCSC, Sigma_L::AbstractMatrix, rho=0.0)
-
-    # invert Sigma_X efficiently
-    Sigma_Xtmp = deepcopy(Sigma_X)
-    Sigma_Xtmp.nzval[:] = 1 ./ Sigma_Xtmp.nzval
-
-    Gamma = A'*Sigma_Xtmp*A
-    tmp = eye(size(Gamma)[1]) + Sigma_L*Gamma
-    R = inv(tmp)
-    B = R*Sigma_L
-    C = Sigma_Xtmp - Sigma_Xtmp*A*B*A'*Sigma_Xtmp
-    D = S*C
-    E = C - C*D
-    G = E*A
-    dA_dense = -2*G*Sigma_L
-    dSigma_L = -2*A'*G - 4*rho*Sigma_L
-    dSigma_X = Sigma_Xtmp
-    dSigma_X.nzval[:] = -diag(E)
-
-    dA = deepcopy(A)
+    dA_dense = -2*commonPart*d.A*Theta_Linv
+    dA = deepcopy(d.A)
     rows = rowvals(dA)
     vals = nonzeros(dA)
     K = size(dA)[2]
@@ -115,56 +156,30 @@ function gradient(S::AbstractMatrix, Sigma_X::SparseMatrixCSC, A::SparseMatrixCS
         end
     end
 
-    dSigma_X, dA, dSigma_L
-end
-function gradient_slow(S::AbstractMatrix, Sigma_X::SparseMatrixCSC, A::SparseMatrixCSC, Sigma_L::AbstractMatrix, rho=0.0)
-    Sigma = Sigma_X + A*Sigma_L*A'
-    Theta = inv(Sigma)
-
-    # invert Sigma_X efficiently
-    Theta_X = deepcopy(Sigma_X)
-    Theta_X.nzval[:] = 1 ./ Theta_X.nzval
-
-    Theta_L = inv(Sigma_L)
-
-    tmp = Theta*(S - Sigma)*Theta
-    dA_dense = 2*(tmp*A*Sigma_L - rho*A)
-    dSigma_L = 2*(A'*tmp*A + 2*rho*Theta_L^3)
-    dSigma_X = spdiagm(diag(tmp + 2*rho*Theta_X^3))
-
-    dA = deepcopy(A)
-    rows = rowvals(dA)
-    vals = nonzeros(dA)
-    K = size(dA)[2]
-    for col = 1:K
-        for j in nzrange(dA, col)
-            vals[j] = dA_dense[rows[j],col]
-        end
-    end
-
-    dSigma_X, dA, dSigma_L
+    CFADistributionGradient(dTheta_X, dA, dTheta_L)
 end
 
-
-function gradient_optimize(S, Ain; iterations=1000, rho=0.0, show_trace=true)
-    P,K = size(Ain)
+function Distributions.fit_mle(::Type{CFADistribution}, A::SparseMatrixCSC, S::AbstractMatrix, N::Int64; iterations=1000, show_trace=true)
+    P,K = size(A)
 
     # init our parameters
-    Sigma_X = speye(P)
-    A = deepcopy(Ain)
-    Sigma_L = eye(K)
+    d = CFADistribution(speye(P), deepcopy(A), eye(K))
     x_init = zeros(Int(P + nnz(A) + (K-1)*K/2))
-    state2vec!(x_init, Sigma_X, A, Sigma_L)
+    state2vec!(x_init, d)
 
     function f(x)
-        vec2state!(Sigma_X, A, Sigma_L, x)
-        -loglikelihood_slow(S, Sigma_X, A, Sigma_L, rho)
+        vec2state!(d, x)
+        try
+            return -loglikelihood(d, S, N)
+        catch
+            1e16 # invalid set of parameters
+        end
     end
 
     function df!(x, g)
-        vec2state!(Sigma_X, A, Sigma_L, x)
-        dSigma_X, dA, dSigma_L = gradient_slow(S, Sigma_X, A, Sigma_L, rho)
-        state2vec!(g, dSigma_X, dA, dSigma_L)
+        vec2state!(d, x)
+        gState = dloglikelihood(d, S, N)
+        state2vec!(g, gState)
         g[:] = -g
     end
 
@@ -175,6 +190,61 @@ function gradient_optimize(S, Ain; iterations=1000, rho=0.0, show_trace=true)
         iterations = iterations
     )
 
-    vec2state!(Sigma_X, A, Sigma_L, res.minimum)
-    Sigma_X,A,Sigma_L
+    vec2state!(d, res.minimum)
+    d
+end
+
+function fit_map(pri::Normal, ::Type{CFADistribution}, A::SparseMatrixCSC, S::AbstractMatrix, N::Int64; iterations=1000, show_trace=true)
+    @assert mean(pri) == 0.0 "Prior must be zero mean!"
+    rho = 1/(std(pri)*N)
+    P,K = size(A)
+
+    # init our parameters
+    d = CFADistribution(speye(P), deepcopy(A), eye(K))
+    x_init = zeros(Int(P + nnz(A) + (K-1)*K/2))
+    state2vec!(x_init, d)
+
+    function f(x)
+        vec2state!(d, x)
+
+        # get likelihood
+        ll = 0.0
+        try
+            ll = loglikelihood(d, S, N)
+        catch
+            return 1e16 # invalid set of parameters
+        end
+
+        # account for prior
+        ll -= rho*sum(d.Theta_X.^2)
+        ll -= rho*sum(d.A.^2)
+        ll -= rho*sum(d.Theta_L.^2)
+
+        -ll
+    end
+
+    function df!(x, g)
+        vec2state!(d, x)
+
+        # get gradient of likelihood
+        gState = dloglikelihood(d, S, N)
+
+        # account for prior
+        gState.Theta_X .-= 2*rho*d.Theta_X
+        gState.A .-= 2*rho*d.A
+        gState.Theta_L .-= 2*rho*d.Theta_L
+
+        state2vec!(g, gState)
+        g[:] = -g
+    end
+
+    res = optimize(f, df!,
+        x_init,
+        method = :l_bfgs,
+        show_trace = show_trace,
+        iterations = iterations
+    )
+
+    vec2state!(d, res.minimum)
+    d
 end
