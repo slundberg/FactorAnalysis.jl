@@ -24,7 +24,6 @@ FactorAnalysis.vec2state!(g, x)
 FactorAnalysis.state2vec!(x, g)
 @test maximum(abs(x .- x_copy)) <= 1e-8
 
-
 # likelihood
 N = 10000
 X = rand(d, N)
