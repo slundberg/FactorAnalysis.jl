@@ -30,7 +30,9 @@ function area_under_pr(truth::AbstractVector, predictor::AbstractVector; resolut
     sort!(vals)
     xvals = map(x->x[1], vals)
     yvals = map(x->-x[2], vals)
-    area_under_curve(xvals, yvals)
+    # println(xvals)
+    # println(yvals)
+    area_under_curve([0.0; xvals], [yvals[1]; yvals]) # make sure we extend all the way to zero
 end
 function area_under_curve(x, y) # must be sorted by increasing x
     area = 0.0
