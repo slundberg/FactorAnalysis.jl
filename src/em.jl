@@ -40,9 +40,8 @@ function Distributions.loglikelihood(d::CFADistributionEM, S::AbstractMatrix, N:
 end
 
 function normalize_Sigma_L!(d::CFADistributionEM)
-    Sigma_L = inv(d.Theta_L)
-    scaling = sqrt(diag(Sigma_L))
-    d.Theta_L[:,:] = inv(Base.cov2cor!(Sigma_L, scaling))
+    scaling = sqrt(diag(d.Sigma_L))
+    Base.cov2cor!(d.Sigma_L, scaling)
     vals = nonzeros(d.A)
     K = size(d.A)[2]
     for col = 1:K
