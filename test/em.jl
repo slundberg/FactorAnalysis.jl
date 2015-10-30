@@ -45,7 +45,7 @@ dopt2 = fit_mle(CFADistributionSigma, spones(A), S, N, show_trace=false, iterati
 @test abs(loglikelihood(dopt, S, N) - loglikelihood(dopt2, S, N)) < 1e-6
 
 println("Testing CFADistributionEM: fit_map...")
-dopt3 = fit_map(CFADistributionEMRidge(0.01), CFADistributionEM, spones(A), S, N, show_trace=false, iterations=15000)
+dopt3 = fit_map(CFADistributionEMRidge(1.1), CFADistributionEM, spones(A), S, N, show_trace=false, iterations=15000)
 @test loglikelihood(dopt3, S, N) < loglikelihood(dopt, S, N)
 @test loglikelihood(dopt3, S, N) > truthLL
 

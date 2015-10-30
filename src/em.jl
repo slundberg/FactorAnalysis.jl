@@ -66,6 +66,7 @@ function Distributions.fit_mle(::Type{CFADistributionEM}, A::SparseMatrixCSC, S:
     timeUpdateSigma_X = 0.0
     timeUpdateA = 0.0
     timeUpdateSigma_L = 0.0
+    stopCount = 0
     for count in 1:iterations
 
         ## E-step
@@ -134,6 +135,9 @@ function Distributions.fit_mle(::Type{CFADistributionEM}, A::SparseMatrixCSC, S:
             println()
 
             if s - lastScore < ftol
+                stopCount += 1
+            end
+            if stopCount > 5
                 break
             end
             lastScore = s
@@ -162,6 +166,7 @@ function fit_map(prior::CFADistributionEMRidge, ::Type{CFADistributionEM}, A::Sp
     timeUpdateSigma_X = 0.0
     timeUpdateA = 0.0
     timeUpdateSigma_L = 0.0
+    stopCount = 0
     for count in 1:iterations
 
         ## E-step
@@ -187,7 +192,7 @@ function fit_map(prior::CFADistributionEMRidge, ::Type{CFADistributionEM}, A::Sp
         timeFindQ += time() - t
 
         ## M-step
-        
+
         # update A and Sigma_X
         t = time()
         tmpTS = T'*S
@@ -225,9 +230,10 @@ function fit_map(prior::CFADistributionEMRidge, ::Type{CFADistributionEM}, A::Sp
             println(d.Sigma_L[1,1], " ", d.Sigma_L[1,2])
             println()
 
-
-
-            if s - lastScore < ftol
+            if abs(s - lastScore) < ftol
+                stopCount += 1
+            end
+            if stopCount > 5
                 break
             end
             lastScore = s
