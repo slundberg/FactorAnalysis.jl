@@ -49,5 +49,5 @@ function area_under_curve(x, y) # must be sorted by increasing x
     area
 end
 function area_under_pr(truth::AbstractMatrix, predictor::AbstractMatrix)
-    area_under_pr(abs(upper(inv(truth))) .> 0.01, abs(upper(inv(predictor))))
+    area_under_pr(abs(upper(truth)) .> 0.01, abs(upper(predictor)))
 end
