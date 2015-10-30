@@ -39,6 +39,18 @@ function Distributions.loglikelihood(d::CFADistributionEM, S::AbstractMatrix, N:
     logdet(Theta) - trace(S*Theta)
 end
 
+function normalize_Sigma_L!(d::CFADistributionEM)
+    Sigma_L = inv(d.Theta_L)
+    scaling = sqrt(diag(Sigma_L))
+    d.Theta_L[:,:] = inv(Base.cov2cor!(Sigma_L, scaling))
+    vals = nonzeros(d.A)
+    K = size(d.A)[2]
+    for col = 1:K
+        for j in nzrange(d.A, col)
+            vals[j] *= scaling[col]
+        end
+    end
+end
 
 " Run the EM algorithm to find the MLE fit."
 function Distributions.fit_mle(::Type{CFADistributionEM}, A::SparseMatrixCSC, S::AbstractMatrix, N::Int64; iterations=1000, show_trace=true, ftol=1e-10)
@@ -77,7 +89,7 @@ function Distributions.fit_mle(::Type{CFADistributionEM}, A::SparseMatrixCSC, S:
         # find Q (the expected covariance of the hidden variables)
         t = time()
         Q = T'*S*T + W
-        Base.cov2cor!(Q, sqrt(diag(Q)))
+        #Base.cov2cor!(Q, sqrt(diag(Q)))
         timeFindQ += time() - t
 
         ## M-step
@@ -127,7 +139,7 @@ function Distributions.fit_mle(::Type{CFADistributionEM}, A::SparseMatrixCSC, S:
             lastScore = s
         end
     end
-
+    normalize_Sigma_L!(d)
     d
 end
 
