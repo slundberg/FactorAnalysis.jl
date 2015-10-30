@@ -30,10 +30,9 @@ truthLL = loglikelihood(d, S, N)
 dopt = fit_mle(CFADistributionEM, spones(A), S, N, show_trace=false, iterations=15000)
 @test loglikelihood(dopt, S, N) > truthLL
 
-# v = FactorAnalysis.area_under_pr(abs(FactorAnalysis.upper(inv(Sigma_L))) .> 0.01, abs(FactorAnalysis.upper(inv(dopt.Sigma_L))))
+# v = FactorAnalysis.area_under_pr(Sigma_L, dopt.Sigma_L)
 # println(truthLL)
 # println(v)
-
 # a = collect(zip(abs(FactorAnalysis.upper(inv(Sigma_L))) .> 0.01, abs(FactorAnalysis.upper(inv(dopt.Sigma_L))), 1:length(FactorAnalysis.upper(inv(Sigma_L)))))
 # for v in sort(a, by=x->x[2])
 #     println(v)
@@ -50,9 +49,9 @@ dopt3 = fit_map(CFADistributionEMRidge(0.01), CFADistributionEM, spones(A), S, N
 @test loglikelihood(dopt3, S, N) < loglikelihood(dopt, S, N)
 @test loglikelihood(dopt3, S, N) > truthLL
 
-# v = FactorAnalysis.area_under_pr(abs(FactorAnalysis.upper(inv(Sigma_L))) .> 0.01, abs(FactorAnalysis.upper(inv(dopt3.Sigma_L))))
+#v = FactorAnalysis.area_under_pr(Sigma_L, dopt3.Sigma_L)
 # println(truthLL)
-# println(v)
+#println(v)
 # println()
 # v = FactorAnalysis.area_under_pr(abs(FactorAnalysis.upper(inv(Sigma_L))) .> 0.01, abs(FactorAnalysis.upper(inv(dopt.Sigma_L + 0.01*eye(K)))))
 # println(v)
