@@ -39,7 +39,7 @@ dopt = fit_mle(CFADistributionEM, ones(K,K), spones(A), S, N, show_trace=false, 
 #     println(v)
 # end
 
-dopt2 = fit_mle(CFADistributionSigma, spones(A), S, N, show_trace=false, iterations=1000)
+dopt2 = fit_mle(CFADistributionSigma, ones(K,K), spones(A), S, N, show_trace=false, iterations=1000)
 #FactorAnalysis.area_under_pr(abs(FactorAnalysis.upper(inv(Sigma_L))) .> 0.01, abs(FactorAnalysis.upper(inv(dopt2.Sigma_L))))
 @assert minimum(eig(dopt2.Sigma_L)[1]) > 0 "CFADistributionSigma found invalid Sigma_L so can't compare to CFADistributionEM"
 @assert minimum(dopt2.Sigma_X.nzval) > 0 "CFADistributionSigma found invalid Sigma_X so can't compare to CFADistributionEM"

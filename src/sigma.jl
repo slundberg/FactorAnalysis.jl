@@ -203,8 +203,12 @@ function dloglikelihood(d::CFADistributionSigma, S::AbstractMatrix, N::Int64)
     CFADistributionSigmaGradient(dSigma_X, dA, dSigma_L)
 end
 
-function Distributions.fit_mle(::Type{CFADistributionSigma}, A::SparseMatrixCSC, S::AbstractMatrix, N::Int64; iterations=1000, show_trace=true)
+function Distributions.fit_mle(::Type{CFADistributionSigma}, maskSigma_L::AbstractMatrix, A::SparseMatrixCSC, S::AbstractMatrix, N::Int64; iterations=1000, show_trace=true)
     P,K = size(A)
+
+    # just to make sure it is a nice float data type inside our loop
+    maskL = zeros(Float64, K, K)
+    copy!(maskL, maskSigma_L)
 
     # init our parameters
     d = CFADistributionSigma(speye(P), deepcopy(A), eye(K))
@@ -223,6 +227,7 @@ function Distributions.fit_mle(::Type{CFADistributionSigma}, A::SparseMatrixCSC,
     function df!(x, g)
         vec2state!(d, x)
         gState = dloglikelihood(d, S, N)
+        gState.Sigma_L .*= maskL
         state2vec!(g, gState)
         g[:] = -g
     end
