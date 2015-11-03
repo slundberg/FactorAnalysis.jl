@@ -52,11 +52,20 @@ function normalize_Sigma_L!(d::CFADistributionEM)
 end
 
 " Run the EM algorithm to find the MLE fit."
-function Distributions.fit_mle(::Type{CFADistributionEM}, A::SparseMatrixCSC, S::AbstractMatrix, N::Int64; iterations=1000, show_trace=true, ftol=1e-10)
+function Distributions.fit_mle(::Type{CFADistributionEM}, maskSigma_L::AbstractMatrix, A::SparseMatrixCSC, S::AbstractMatrix, N::Int64; iterations=1000, show_trace=true, ftol=1e-10)
     P,K = size(A)
+    @assert size(maskSigma_L) == (K,K) "Sigma_L mask must be of size K x K (where K = size(A)[2])"
+    #@assert size(maskL) == (K,K) "Sigma_L mask must be of size K x K (where K = size(A)[2])"
+
+    # just to make sure it is a nice float data type inside our loop
+    maskL = zeros(Float64, K, K)
+    copy!(maskL, maskSigma_L)
 
     # init our parameters
     d = CFADistributionEM(speye(P), deepcopy(A), eye(K))
+
+    # find the latent vars each observed is attached to
+    latentInds = Array{Int64}[find(d.A[i,:]) for i in 1:P]
 
     Theta_X = deepcopy(d.Sigma_X)
     lastScore = -Inf
@@ -77,7 +86,7 @@ function Distributions.fit_mle(::Type{CFADistributionEM}, A::SparseMatrixCSC, S:
         end
         Theta_L = inv(d.Sigma_L)
         Theta = Theta_X - Theta_X*d.A*inv(Theta_L + d.A'*Theta_X*d.A)*d.A'*Theta_X
-        #Theta = inv(Sigma_X + A*Sigma_L*A')
+        #@assert maximum(abs(Theta .- inv(d.Sigma_X + d.A*d.Sigma_L*d.A'))) < 1e-6
         T = Theta*d.A*d.Sigma_L
         timeFindT += time() - t
 
@@ -102,20 +111,30 @@ function Distributions.fit_mle(::Type{CFADistributionEM}, A::SparseMatrixCSC, S:
         #     d.A[i,gi] = tmpTS[gi,i]/Q[gi,gi]
         #     d.Sigma_X[i,i] = S[i,i] - (tmpTS[gi,i]^2)/Q[gi,gi]
         # end
-        rows = rowvals(d.A)
-        vals = nonzeros(d.A)
-        for col = 1:K
-            for j in nzrange(d.A, col)
-                row = rows[j]
-                d.Sigma_X.nzval[row] = S[row,row] - (tmpTS[col,row]^2)/Q[col,col]
-                vals[j] = tmpTS[col,row]/Q[col,col]
+        #At = d.A'
+        #rows = rowvals(At)
+        #vals = nonzeros(At)
+        for row = 1:P
+
+            # update Sigma_X
+            inds = latentInds[row]
+            tmp = tmpTS[inds,row]
+            #println(inds, " ", collect(nzrange(At, col)))
+            newLoadings = inv(Q[inds,inds])*tmp
+            #println(S[col,col] - tmpTS[inds,col]'*newLoadings)
+            d.Sigma_X.nzval[row] = (S[row,row] - tmp'*newLoadings)[1]
+
+            # Update A
+            for (i,ind) in enumerate(inds)
+                d.A[row,ind] = newLoadings[i]
             end
         end
+        #d.A = At'
         timeUpdateA += time() - t
 
         # update Sigma_L
         t = time()
-        d.Sigma_L[:,:] = Q
+        d.Sigma_L[:,:] = Q .* maskL # note we enforce the Sigma_L mask here
 
         timeUpdateSigma_L += time() - t
 
@@ -210,6 +229,7 @@ function fit_map(prior::CFADistributionEMRidge, ::Type{CFADistributionEM}, A::Sp
         # update Sigma_L
         t = time()
 
+        Base.cov2cor!(Q, sqrt(diag(Q)))
         d.Sigma_L[:,:] = Q + prior.rho*eye(K)
         Base.cov2cor!(d.Sigma_L, sqrt(diag(d.Sigma_L)))
         #Base.cov2cor!(d.Sigma_L, sqrt(prior.rho ./ (diag(Q) + prior.rho)))

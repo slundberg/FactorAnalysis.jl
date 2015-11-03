@@ -27,8 +27,9 @@ d = CFADistributionEM(Sigma_X, A, Sigma_L)
 
 println("Testing CFADistributionEM: fit_mle...")
 truthLL = loglikelihood(d, S, N)
-dopt = fit_mle(CFADistributionEM, spones(A), S, N, show_trace=false, iterations=15000)
+dopt = fit_mle(CFADistributionEM, ones(K,K), spones(A), S, N, show_trace=false, iterations=15000)
 @test loglikelihood(dopt, S, N) > truthLL
+@test FactorAnalysis.area_under_pr(inv(Sigma_L), inv(dopt.Sigma_L)) > 0.9
 
 # v = FactorAnalysis.area_under_pr(inv(Sigma_L), inv(dopt.Sigma_L))
 # println(truthLL)
@@ -48,8 +49,67 @@ println("Testing CFADistributionEM: fit_map...")
 dopt3 = fit_map(CFADistributionEMRidge(1.1), CFADistributionEM, spones(A), S, N, show_trace=false, iterations=15000)
 @test loglikelihood(dopt3, S, N) < loglikelihood(dopt, S, N)
 @test loglikelihood(dopt3, S, N) > truthLL
+@test FactorAnalysis.area_under_pr(inv(Sigma_L), inv(dopt3.Sigma_L)) > 0.6 # we over regularized here so we don't expect good performance
 
-#v = FactorAnalysis.area_under_pr(inv(Sigma_L), inv(dopt3.Sigma_L))
+println("Testing CFADistributionEM: fit_mle with a fully connected latent variable...")
+srand(10)
+P = 40
+K = 20
+Sigma_X = spdiagm(rand(P) .+ 0.2)
+A = sparse(1:P, Int64[ceil(i/2) for i in 1:P], ones(P))
+Sigma_L = FactorAnalysis.randcor(K, 0.2)
+d = CFADistributionEM(Sigma_X, A, Sigma_L)
+N = 100000
+X = rand(d, N)
+
+# add a confounding latent factor
+confounder = randn(P)
+for i in 1:N
+    X[:,i] .+= randn()*confounder
+end
+
+S = X*X' / N
+Base.cov2cor!(S, sqrt(diag(S)))
+truthLL = loglikelihood(d, S, N)
+
+# create an independent component to handle the confounder
+maskSigma_L = ones(K+1,K+1)
+for i in 1:K
+    maskSigma_L[K+1,i] = maskSigma_L[i,K+1] = 0
+end
+A2 = sparse([1:P; 1:P], [Int64[ceil(i/2) for i in 1:P]; ones(Int64, P)*(K+1)], ones(2*P))
+
+dopt = fit_mle(CFADistributionEM, maskSigma_L, A2, S, N, show_trace=false, iterations=15000)
+Th = inv(dopt.Sigma_X + dopt.A*dopt.Sigma_L*dopt.A')
+# display(dopt.A)
+# tmp = deepcopy(dopt.Sigma_L)
+# dopt.Sigma_L = dopt.Sigma_L * (2*eye(K+1))
+# #Base.cov2cor!(dopt.Sigma_L, 2*ones(K+1))
+# FactorAnalysis.normalize_Sigma_L!(dopt::CFADistributionEM)
+# display(dopt.A)
+# display(tmp)
+# println()
+# display(dopt.Sigma_L)
+# @test maximum(abs(tmp .- dopt.Sigma_L)) < 1e-8
+#
+# display(dopt.Sigma_X + dopt.A*dopt.Sigma_L*dopt.A')
+# println()
+# println("GGG2")
+# display(S)
+# println()
+#
+# println(logdet(Th) - trace(S*Th))
+# println(logdet(inv(S)) - trace(S*inv(S)))
+# # display(Sigma_X)
+# display(dopt.Sigma_X)
+# display(Sigma_L)
+# println()
+# display(dopt.Sigma_L)
+# display(dopt.A)
+@test loglikelihood(dopt, S, N) > truthLL
+@test FactorAnalysis.area_under_pr(inv(Sigma_L), inv(dopt.Sigma_L[1:K,1:K])) > 0.9
+
+
 # println(truthLL)
 #println(v)
 # println()
